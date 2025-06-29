@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1015058955291",
+    "project_id": "nutricero-4bc12",
+    "storage_bucket": "nutricero-4bc12.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1015058955291:android:bdae504e34f2bae8780cbe",
+        "android_client_info": {
+          "package_name": "com.donacion_app.t2_apps"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzUOOoBe9T5e3iz4MuWfOUy7VGJus8Uv8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
