@@ -1,6 +1,7 @@
 package com.donacion_app.t2_apps
 
 import android.widget.Toast
+import androidx.lifecycle.ViewModel
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
@@ -51,21 +53,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @Composable
-fun LoginScreen(rootNavController: NavHostController) {
+fun LoginScreen(rootNavController: NavHostController, viewModel: LoginViewModel = viewModel()) {
     val context = LocalContext.current
-    val email = remember { mutableStateOf("") }
-    val password = remember { mutableStateOf("") }
-    val recoveryEmail = remember { mutableStateOf("") }
-    val showDialog = remember { mutableStateOf(false) }
 
-    val scope = rememberCoroutineScope()
-    val isLoading = remember { mutableStateOf(false) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.4f))
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))) {
         Image(
             painter = painterResource(id = R.drawable.fondo_restaurante), // Fondo de restaurante
             contentDescription = "Fondo",
@@ -104,8 +95,8 @@ fun LoginScreen(rootNavController: NavHostController) {
             Spacer(modifier = Modifier.height(24.dp))
 
             OutlinedTextField(
-                value = email.value,
-                onValueChange = { email.value = it },
+                value = viewModel.email,
+                onValueChange = { viewModel.email = it },
                 label = { Text("Correo electrónico") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(0.9f),
@@ -113,14 +104,14 @@ fun LoginScreen(rootNavController: NavHostController) {
                     unfocusedContainerColor = Color.White.copy(alpha = 0.9f),
                     focusedContainerColor = Color.White
                 ),
-                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Default.Email, null) }
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedTextField(
-                value = password.value,
-                onValueChange = { password.value = it },
+                value = viewModel.password,
+                onValueChange = { viewModel.password = it },
                 label = { Text("Contraseña") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
@@ -129,121 +120,76 @@ fun LoginScreen(rootNavController: NavHostController) {
                     unfocusedContainerColor = Color.White.copy(alpha = 0.9f),
                     focusedContainerColor = Color.White
                 ),
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Default.Lock, null) }
             )
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Button(
                 onClick = {
-                    scope.launch {
-                        isLoading.value = true
-                        val result = loginUser(email.value, password.value)
-                        isLoading.value = false
-                        if (result) {
+                    viewModel.login(
+                        onSuccess = {
                             rootNavController.navigate("main") {
                                 popUpTo("login") { inclusive = true }
                             }
-                        } else {
-                            Toast.makeText(context, "Error de login", Toast.LENGTH_SHORT).show()
+                        },
+                        onFailure = {
+                            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
                         }
-                    }
+                    )
                 },
-                modifier = Modifier
-                    .fillMaxWidth(0.9f)
-                    .height(50.dp),
+                modifier = Modifier.fillMaxWidth(0.9f).height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
             ) {
                 Text("Iniciar Sesión", color = Color.White)
             }
 
-            if (isLoading.value) {
-                Spacer(modifier = Modifier.height(12.dp))
-                CircularProgressIndicator()
-            }
-
+            if (viewModel.isLoading) CircularProgressIndicator()
             Spacer(modifier = Modifier.height(12.dp))
 
             Button(
-                onClick = { showDialog.value = true },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A)),
-                modifier = Modifier
-                    .fillMaxWidth(0.9f)
-                    .height(50.dp)
+                onClick = { viewModel.showDialog = true },
+                modifier = Modifier.fillMaxWidth(0.9f).height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A))
             ) {
                 Text("Olvidé mi contraseña", color = Color.White)
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(Icons.Default.Email, contentDescription = null, tint = Color.White)
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            TextButton(onClick = {
-                rootNavController.navigate("register")
-            }) {
+            TextButton(onClick = { rootNavController.navigate("register") }) {
                 Text("¿No tienes cuenta? Regístrate aquí", color = Color.White)
             }
         }
     }
 
-    // Diálogo de recuperación de contraseña
-    if (showDialog.value) {
+    if (viewModel.showDialog) {
         AlertDialog(
-            onDismissRequest = {
-                showDialog.value = false
-                recoveryEmail.value = ""
-            },
+            onDismissRequest = { viewModel.showDialog = false },
             title = { Text("Recuperar contraseña") },
             text = {
-                Column {
-                    Text("Ingresa tu correo registrado")
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = recoveryEmail.value,
-                        onValueChange = { recoveryEmail.value = it },
-                        label = { Text("Correo electrónico") },
-                        singleLine = true
-                    )
-                }
+                OutlinedTextField(
+                    value = viewModel.recoveryEmail,
+                    onValueChange = { viewModel.recoveryEmail = it },
+                    label = { Text("Correo electrónico") }
+                )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (recoveryEmail.value.isNotBlank()) {
-                        FirebaseAuth.getInstance().sendPasswordResetEmail(recoveryEmail.value)
-                            .addOnSuccessListener {
-                                Toast.makeText(context, "Correo de recuperación enviado", Toast.LENGTH_LONG).show()
-                                recoveryEmail.value = ""
-                                showDialog.value = false
-                            }
-                            .addOnFailureListener {
-                                Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_LONG).show()
-                            }
-                    } else {
-                        Toast.makeText(context, "Correo requerido", Toast.LENGTH_SHORT).show()
-                    }
-                }) {
-                    Text("Enviar")
-                }
+                    viewModel.sendRecoveryEmail(
+                        onSuccess = {
+                            Toast.makeText(context, "Correo enviado", Toast.LENGTH_LONG).show()
+                            viewModel.showDialog = false
+                        },
+                        onFailure = {
+                            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                        }
+                    )
+                }) { Text("Enviar") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showDialog.value = false
-                    recoveryEmail.value = ""
-                }) {
+                TextButton(onClick = { viewModel.showDialog = false }) {
                     Text("Cancelar")
                 }
             }
         )
-    }
-}
-
-// Función de login usando Firebase Auth
-suspend fun loginUser(email: String, password: String): Boolean {
-    return try {
-        Firebase.auth.signInWithEmailAndPassword(email, password).await()
-        true
-    } catch (e: Exception) {
-        e.printStackTrace()
-        false
     }
 }
