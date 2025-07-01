@@ -34,89 +34,53 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
 @Composable
-fun MenuScreen(navController: NavHostController) {
+fun MenuScreen(navController: NavHostController, viewModel: MenuViewModel = viewModel()) {
     val context = LocalContext.current
-    val dishes = remember { mutableStateListOf<DishModel>() }
     var dishToDelete by remember { mutableStateOf<DishModel?>(null) }
 
-    fun loadDishes() {
-        val db = Firebase.firestore
-        db.collection("dishes").get()
-            .addOnSuccessListener { result ->
-                dishes.clear()
-                for (doc in result) {
-                    val dish = doc.toObject(DishModel::class.java)
-                    dishes.add(dish)
-                }
-            }
-            .addOnFailureListener {
-                Toast.makeText(context, "Error al cargar los platos", Toast.LENGTH_SHORT).show()
-            }
-    }
-
-    LaunchedEffect(true) {
-        loadDishes()
-    }
+    LaunchedEffect(true) { viewModel.loadDishes() }
 
     Scaffold(
         topBar = {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFB78018)) // Dorado
-                    .padding(vertical = 20.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Menú del Restaurante",
-                    color = Color.White,
-                    style = TextStyle(
-                        fontSize = 26.sp,
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Bold,
-                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                        letterSpacing = 1.2.sp
-                    )
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFB78018)) // Dorado
+                .padding(vertical = 20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Menú del Restaurante",
+                color = Color.White,
+                style = TextStyle(
+                    fontSize = 26.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    letterSpacing = 1.2.sp
                 )
-            }
-        },
-
+            )
+        }},
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    navController.navigate("register_dish")
-                },
+            FloatingActionButton(onClick = { navController.navigate("register_dish") },
                 containerColor = Color(0xFFB78018),
                 contentColor = Color.White,
-                shape = CircleShape
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Agregar plato"
-                )
+                shape = CircleShape) {
+                Icon(Icons.Default.Add, contentDescription = "Agregar plato")
             }
         },
         floatingActionButtonPosition = FabPosition.End,
         containerColor = Color(0xFFFFF8E1) // Fondo general crema claro
     ) { innerPadding ->
-        if (dishes.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "No hay platos registrados",
-                    color = Color.Gray,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium
-                )
+        if (viewModel.dishes.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
+                Text("No hay platos registrados", color = Color.Gray)
             }
         } else {
             LazyColumn(
@@ -125,40 +89,36 @@ fun MenuScreen(navController: NavHostController) {
                     .padding(innerPadding)
                     .background(Color(0xFFFFF8E1)) // Fondo crema claro
             ) {
-                items(dishes) { dish ->
+                items(viewModel.dishes) { dish ->
                     DishCard(
                         dish = dish,
-                        onEditClick = {
-                            navController.navigate("edit_dish/${dish.id}")
-                        },
-                        onDeleteClick = {
-                            dishToDelete = dish
-                        }
+                        onEditClick = { navController.navigate("edit_dish/${dish.id}") },
+                        onDeleteClick = { dishToDelete = dish }
                     )
                 }
             }
         }
 
-        // Diálogo de confirmación de eliminación
-        dishToDelete?.let { dish ->
+        if (dishToDelete != null) {
             AlertDialog(
                 onDismissRequest = { dishToDelete = null },
-                title = { Text("Confirmar eliminación") },
-                text = { Text("¿Seguro que quieres eliminar el plato '${dish.name}'?") },
+                title = { Text("Eliminar plato") },
+                text = { Text("¿Eliminar '${dishToDelete?.name}'?") },
                 confirmButton = {
-                    TextButton(
-                        onClick = {
-                            Firebase.firestore.collection("dishes").document(dish.id).delete()
-                                .addOnSuccessListener {
-                                    Toast.makeText(context, "Plato eliminado", Toast.LENGTH_SHORT).show()
-                                    loadDishes()
-                                }
-                                .addOnFailureListener {
-                                    Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
-                                }
-                            dishToDelete = null
-                        }
-                    ) {
+                    TextButton(onClick = {
+                        viewModel.deleteDish(
+                            id = dishToDelete!!.id,
+                            onSuccess = {
+                                Toast.makeText(context, "Eliminado", Toast.LENGTH_SHORT).show()
+                                viewModel.loadDishes()
+                                dishToDelete = null
+                            },
+                            onError = {
+                                Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                                dishToDelete = null
+                            }
+                        )
+                    }) {
                         Text("Eliminar")
                     }
                 },

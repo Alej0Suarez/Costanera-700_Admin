@@ -57,7 +57,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @Composable
-fun RegisterDishScreenFirebase(navController: NavHostController) {
+fun RegisterDishScreenFirebase(
+    navController: NavHostController,
+    repository: DishRepository = FirebaseDishRepository()
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -68,7 +71,7 @@ fun RegisterDishScreenFirebase(navController: NavHostController) {
 
     val imageUri = remember { mutableStateOf<Uri?>(null) }
     val cameraImageUri = remember { mutableStateOf<Uri?>(null) }
-    val isLoadingImage = remember { mutableStateOf(false) }
+    val isLoading = remember { mutableStateOf(false) }
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { imageUri.value = it }
@@ -208,10 +211,8 @@ fun RegisterDishScreenFirebase(navController: NavHostController) {
                 }
 
                 scope.launch {
-                    isLoadingImage.value = true
+                    isLoading.value = true
                     val imageUrl = uploadImageToFirebaseStorage(context, imageUri.value!!)
-                    isLoadingImage.value = false
-
                     if (imageUrl != null) {
                         val dish = DishModel(
                             name = name.value,
@@ -220,14 +221,20 @@ fun RegisterDishScreenFirebase(navController: NavHostController) {
                             category = category.value,
                             imageUrl = imageUrl
                         )
-
-                        val success = saveDishToFirestore(dish)
-                        Toast.makeText(context, if (success) "Plato registrado" else "Error al registrar plato", Toast.LENGTH_SHORT).show()
-
-                        if (success) navController.popBackStack()
+                        val result = repository.addDish(dish)
+                        result.fold(
+                            onSuccess = {
+                                Toast.makeText(context, "Plato registrado", Toast.LENGTH_SHORT).show()
+                                navController.popBackStack()
+                            },
+                            onFailure = {
+                                Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        )
                     } else {
                         Toast.makeText(context, "Error al subir imagen", Toast.LENGTH_SHORT).show()
                     }
+                    isLoading.value = false
                 }
             },
             modifier = Modifier
@@ -238,7 +245,7 @@ fun RegisterDishScreenFirebase(navController: NavHostController) {
             Text("Registrar", color = Color.White)
         }
 
-        if (isLoadingImage.value) {
+        if (isLoading.value) {
             Spacer(modifier = Modifier.height(12.dp))
             CircularProgressIndicator()
         }
