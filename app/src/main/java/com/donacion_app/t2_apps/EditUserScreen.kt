@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.firestore.ktx.firestore
@@ -56,68 +57,33 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @Composable
-fun EditUserScreen(navController: NavHostController, userId: String) {
+fun EditUserScreen(navController: NavHostController, userId: String, viewModel: EditUserViewModel = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-
-    val initialUser = remember { mutableStateOf<UserModel?>(null) }
-
-    val name = remember { mutableStateOf("") }
-    val lastName = remember { mutableStateOf("") }
-    val email = remember { mutableStateOf("") }
-    val password = remember { mutableStateOf("") }
-    val phone = remember { mutableStateOf("") }
-
-    val imageUri = remember { mutableStateOf<Uri?>(null) }
-    val imageUrl = remember { mutableStateOf("") }
-    val isLoadingImage = remember { mutableStateOf(false) }
-
     val showExitDialog = remember { mutableStateOf(false) }
 
-    LaunchedEffect(userId) {
-        val doc = Firebase.firestore.collection("users").document(userId).get().await()
-        val user = doc.toObject(UserModel::class.java)
-        user?.let {
-            initialUser.value = it
-            name.value = it.name
-            lastName.value = it.lastName
-            email.value = it.email
-            password.value = it.password
-            phone.value = it.phone
-            imageUrl.value = it.imageUrl
-        }
-    }
-
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { imageUri.value = it }
+        uri?.let { viewModel.imageUri = it }
     }
 
-    fun hasUnsavedChanges(): Boolean {
-        val initial = initialUser.value ?: return false
-        return name.value != initial.name ||
-                lastName.value != initial.lastName ||
-                email.value != initial.email ||
-                password.value != initial.password ||
-                phone.value != initial.phone ||
-                imageUri.value != null
+    LaunchedEffect(userId) {
+        viewModel.loadUser(userId)
     }
 
-    BackHandler(enabled = hasUnsavedChanges()) {
+    BackHandler(enabled = viewModel.hasUnsavedChanges()) {
         showExitDialog.value = true
     }
 
     if (showExitDialog.value) {
         AlertDialog(
             onDismissRequest = { showExitDialog.value = false },
-            title = { Text("¿Salir sin guardar?", fontWeight = FontWeight.Bold) },
-            text = { Text("Tienes cambios sin guardar. ¿Estás seguro de que deseas salir?") },
+            title = { Text("¿Salir sin guardar?") },
+            text = { Text("Tienes cambios sin guardar. ¿Deseas salir?") },
             confirmButton = {
                 TextButton(onClick = {
                     showExitDialog.value = false
                     navController.popBackStack()
-                }) {
-                    Text("Salir", color = Color.Red)
-                }
+                }) { Text("Salir", color = Color.Red) }
             },
             dismissButton = {
                 TextButton(onClick = { showExitDialog.value = false }) {
@@ -135,13 +101,7 @@ fun EditUserScreen(navController: NavHostController, userId: String) {
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            "Editar Usuario",
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFFB78018)
-        )
-
+        Text("Editar Usuario", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB78018))
         Spacer(Modifier.height(20.dp))
 
         Box(
@@ -152,25 +112,19 @@ fun EditUserScreen(navController: NavHostController, userId: String) {
                 .background(Color(0xFFFDE7C2))
         ) {
             when {
-                imageUri.value != null -> {
-                    Image(
-                        painter = rememberAsyncImagePainter(imageUri.value),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                imageUrl.value.isNotEmpty() -> {
-                    Image(
-                        painter = rememberAsyncImagePainter(imageUrl.value),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                else -> {
-                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(60.dp), tint = Color.Gray)
-                }
+                viewModel.imageUri != null -> Image(
+                    painter = rememberAsyncImagePainter(viewModel.imageUri),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                viewModel.imageUrl.isNotEmpty() -> Image(
+                    painter = rememberAsyncImagePainter(viewModel.imageUrl),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                else -> Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(60.dp), tint = Color.Gray)
             }
         }
 
@@ -182,103 +136,37 @@ fun EditUserScreen(navController: NavHostController, userId: String) {
 
         Spacer(Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = name.value, onValueChange = { name.value = it },
-            label = { Text("Nombres") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = lastName.value, onValueChange = { lastName.value = it },
-            label = { Text("Apellidos") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = email.value, onValueChange = { email.value = it },
-            label = { Text("Correo electrónico") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = password.value, onValueChange = { password.value = it },
-            label = { Text("Contraseña") },
-            modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation(),
-            singleLine = true
-        )
-        Spacer(Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = phone.value, onValueChange = { phone.value = it },
-            label = { Text("Teléfono") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
-        )
+        OutlinedTextField(value = viewModel.name, onValueChange = { viewModel.name = it }, label = { Text("Nombres") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = viewModel.lastName, onValueChange = { viewModel.lastName = it }, label = { Text("Apellidos") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = viewModel.email, onValueChange = { viewModel.email = it }, label = { Text("Correo electrónico") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = viewModel.password, onValueChange = { viewModel.password = it }, label = { Text("Contraseña") }, modifier = Modifier.fillMaxWidth(), visualTransformation = PasswordVisualTransformation())
+        OutlinedTextField(value = viewModel.phone, onValueChange = { viewModel.phone = it }, label = { Text("Teléfono") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
 
         Spacer(Modifier.height(24.dp))
 
         Button(
             onClick = {
                 scope.launch {
-                    if (name.value.isBlank() || lastName.value.isBlank() || email.value.isBlank() || password.value.isBlank() || phone.value.isBlank()) {
-                        Toast.makeText(context, "Por favor completa todos los campos", Toast.LENGTH_SHORT).show()
-                        return@launch
-                    }
-
-                    var finalImageUrl = imageUrl.value
-
-                    if (imageUri.value != null) {
-                        isLoadingImage.value = true
-                        val uploadedUrl = uploadImageToFirebaseStorage(context, imageUri.value!!)
-                        isLoadingImage.value = false
-                        if (uploadedUrl != null) {
-                            finalImageUrl = uploadedUrl
-                        } else {
-                            Toast.makeText(context, "Error al subir imagen", Toast.LENGTH_SHORT).show()
-                            return@launch
+                    val result = viewModel.saveChanges(context, userId)
+                    result.fold(
+                        onSuccess = {
+                            Toast.makeText(context, "Usuario actualizado", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack()
+                        },
+                        onFailure = {
+                            Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show()
                         }
-                    }
-
-                    val updatedUser = UserModel(
-                        id = userId,
-                        name = name.value,
-                        lastName = lastName.value,
-                        email = email.value,
-                        password = password.value,
-                        phone = phone.value,
-                        imageUrl = finalImageUrl
                     )
-
-                    try {
-                        Firebase.firestore.collection("users").document(userId).set(updatedUser).await()
-                        Toast.makeText(context, "Usuario actualizado", Toast.LENGTH_SHORT).show()
-                        navController.popBackStack()
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Error al actualizar", Toast.LENGTH_SHORT).show()
-                    }
                 }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFB78018),
-                contentColor = Color.White
-            ),
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB78018), contentColor = Color.White),
             shape = RoundedCornerShape(10.dp)
         ) {
             Text("Guardar Cambios")
         }
 
-        if (isLoadingImage.value) {
+        if (viewModel.isLoading) {
             Spacer(modifier = Modifier.height(12.dp))
             CircularProgressIndicator()
         }
